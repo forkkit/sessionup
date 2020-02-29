@@ -269,7 +269,7 @@ func (m *Manager) wrap(rej func(error) http.Handler, next http.Handler) http.Han
 			return
 		}
 
-		if m.validate && !s.isValid(r) {
+		if m.validate && !s.IsValid(r) {
 			rej(errors.New("unauthorized")).ServeHTTP(w, r)
 			return
 		}
@@ -298,6 +298,31 @@ func (m *Manager) Revoke(ctx context.Context, w http.ResponseWriter) error {
 // RevokeByID deletes session by its ID.
 // Function will be no-op and return nil, if no session is found.
 func (m *Manager) RevokeByID(ctx context.Context, id string) error {
+	return m.store.DeleteByID(ctx, id)
+}
+
+// RevokeByIDExt deletes session by its ID after checking if it
+// belongs to the same user as the one in the context.
+// Function will be no-op and return nil, if no session is found.
+func (m *Manager) RevokeByIDExt(ctx context.Context, id string) error {
+	s1, ok := FromContext(ctx)
+	if !ok {
+		return nil
+	}
+
+	s2, ok, err := m.store.FetchByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	if s2.UserKey != s1.UserKey {
+		return errors.New("session can be revoked only by its owner")
+	}
+
 	return m.store.DeleteByID(ctx, id)
 }
 
